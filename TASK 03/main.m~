@@ -110,7 +110,7 @@ if caso == 3
     %[iter,J, coord, U, connect] = UNVARTOP_2D_Gripper(150, 75, 14 , 0, 0.85, -2, 0.5);
     
     [iter, J, coord, U, connect] = UNVARTOP_2D_complmechanism_modified(150, 75, 14 , 0, 0.85, -2, 0.5, ...
-        F_msg1, F_msg2, fixed_dofs_msg, active_msg, passive_msg);
+        F_msg, fixed_dofs_msg, active_msg, passive_msg);
     
     %[iter, J, coord, U, connect] = UNVARTOP_2D_complmechanism_modified(200, 80, 12, 0, 0.7, -2, 0.5, ...
     %    F_msg, fixed_dofs_msg, active_msg, passive_msg);

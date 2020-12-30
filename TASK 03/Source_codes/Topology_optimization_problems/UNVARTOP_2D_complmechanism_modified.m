@@ -26,7 +26,7 @@
 %	You should have received a copy of the GNU General Public License along with this  %
 %	program.  If not, see <https://www.gnu.org/licenses/>.							   %
 %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%%%%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%%
-function [iter, J, coord, U, connect] = UNVARTOP_2D_complmechanism (nelx,nely,nsteps,Vol0,Vol,k,tau, F_msg, fixed_dofs_msg, active_msg, passive_msg)
+function [iter, J, coord, U, connect] = UNVARTOP_2D_complmechanism (nelx,nely,nsteps,Vol0,Vol,k,tau, F_msg1, F_msg2, fixed_dofs_msg, active_msg, passive_msg)
 n_dim = 2; n_unkn = 2; n_nodes = 4; n_gauss = 4; n = (nelx+1)*(nely+1); h_e = 1; alpha0 = 1e-3;
 iter_max_step = 20; iter_min_step = 4; iter_max = 500;
 opt = struct('Plot_top_iso',1,'Plot_vol_step',1,'EdgeColor','none','solver_Lap','direct');
@@ -39,19 +39,11 @@ connect = nodeVec+[0 nely+[1 0] -1]; clear nodeVec;
 F = sparse(n_unkn*n,2);
 U = zeros(n_unkn*n,2);
 
-%eval(F_msg)
-%eval(fixed_dofs_msg)
-%eval(active_msg)
-%eval(passive_msg)
-
-F( n_unkn * find(coord(:,2) >=0.9* nely & coord(: ,1) ==0) -1 ,1) = 0.0001* nelx ;
-F( n_unkn * find(coord(:,2) == round(0.9*nely)& coord(:,1)>=0.9* nelx),2 ) = 0.0001*nelx ;
-fixed_dofs = [ reshape( n_unkn * find ( coord(: ,2) == nely ) ,1 ,[]) , ...
-    reshape(n_unkn * find(coord(:,1)==0 & coord(:,2)<=0.1*nely) +(-n_unkn +1:0) ,1 ,[]) ];
-active_node = [ find(coord (: ,2) >0.9* nely &coord (: ,1) <0.05* nelx); ...
-    find(coord(:,2)>0.9* nely & coord (:,2) <=0.95* nely & coord(:,1) >=0.9*nelx) ];
-passive_node = [ find(coord (:,1)>0.8*nelx & coord(:,1)<0.9*nelx & coord(:,2)>0.8*nely); ...
-    find( coord (: ,1) >=0.9* nelx & coord (: ,2) >0.95* nely ) ];
+eval(F_msg1)
+eval(F_msg2)
+eval(fixed_dofs_msg)
+eval(active_msg)
+eval(passive_msg)
 
 free_dofs = setdiff(1:(n_unkn*n),fixed_dofs);
 U(fixed_dofs,:) = 0;
@@ -97,7 +89,7 @@ psi = alpha0*ones(n,1); psi(passive_node) = -alpha0; psi(active_node) = alpha0; 
 [~,chi] = compute_volume (psi,connect); chi0_step = chi; chi_vec(:,1) = chi';
 % Initialize variables
 iter = 1; J_vec = []; vol_vec = []; lambda_vec = 0; lambda = 0; fhandle6 = [];
-%[fhandle2,ohandle2] = plot_isosurface([],[],0,psi,coord,connect,1,opt);
+[fhandle2,ohandle2] = plot_isosurface([],[],0,psi,coord,connect,1,opt);
 for i_step = 1:nsteps
 	[t_ref] = set_reference_volume(i_step,Vol0,Vol,nsteps,k);
 	% Main loop by steps
@@ -133,7 +125,7 @@ for i_step = 1:nsteps
 		lambda_vec = [lambda_vec,lambda];
 		Tol_lambda = (lambda_vec(iter+1)-lambda_vec(iter))/lambda_vec(iter+1);
 		% Plot topology
-		%[fhandle2,ohandle2] = plot_isosurface(fhandle2,ohandle2,iter,psi,coord,connect,J,opt);
+		[fhandle2,ohandle2] = plot_isosurface(fhandle2,ohandle2,iter,psi,coord,connect,J,opt);
 		% Update variables
 		Tol_chi = sqrt(sum((chi-chi_n).^2))/sqrt(sum(chi0_step.^2));
 		chi = chi_n;
@@ -143,7 +135,7 @@ for i_step = 1:nsteps
 	end
 	chi0_step = chi;
 	if J<10
-		%[fhandle6,J_vec,vol_vec] = plot_volume_iter(fhandle6,i_step,J_vec,J,vol_vec,vol,opt.Plot_vol_step,6,'Cost function Step','#step','+-b');
+		[fhandle6,J_vec,vol_vec] = plot_volume_iter(fhandle6,i_step,J_vec,J,vol_vec,vol,opt.Plot_vol_step,6,'Cost function Step','#step','+-b');
 		psi_vec(:,i_step+1)=psi; chi_vec(:,i_step+1)=chi'; U_vec(:,:,i_step+1)=U;
 	end
 	if iter_step >= iter_max_step; warning('UNVARTOP_2D_complmechanism:Max_iter_step','Maximum number of in-step iterations achieved.'); break; end
@@ -151,11 +143,11 @@ for i_step = 1:nsteps
 end
 %% Animation
 % Add
-[fhandle2,ohandle2] = plot_isosurface([],[],0,psi,coord,connect,1,opt);
+%[fhandle2,ohandle2] = plot_isosurface([],[],0,psi,coord,connect,1,opt);
 [fhandle2,ohandle2] = plot_isosurface(fhandle2,ohandle2,iter,psi,coord,connect,J,opt);
 %[fhandle6,J_vec,vol_vec] = plot_volume_iter(fhandle6,i_step,J_vec,J,vol_vec,vol,opt.Plot_vol_step,6,'Cost function Step','#step','+-b');
 % Commented
-%Topology_evolution(coord,connect,[Vol0,vol_vec],psi_vec,chi_vec,U_vec);
+Topology_evolution(coord,connect,[Vol0,vol_vec],psi_vec,chi_vec,U_vec);
 
 
 %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%%

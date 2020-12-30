@@ -27,7 +27,7 @@
 %	You should have received a copy of the GNU General Public License along with this  %
 %	program.  If not, see <https://www.gnu.org/licenses/>.							   %
 %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%%%%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%% %%%%
-function [iter,J] = UNVARTOP_2D_Gripper (nelx,nely,nsteps,Vol0,Vol,k,tau)
+function [iter,J, coord, U, connect] = UNVARTOP_2D_Gripper (nelx,nely,nsteps,Vol0,Vol,k,tau)
 n_dim = 2; n_unkn = 2; n_nodes = 4; n_gauss = 4; n = (nelx+1)*(nely+1); h_e = 1; alpha0 = 1e-3;
 iter_max_step = 20; iter_min_step = 4; iter_max = 500;
 opt = struct('Plot_top_iso',1,'Plot_vol_step',1,'EdgeColor','none','solver_Lap','direct');
