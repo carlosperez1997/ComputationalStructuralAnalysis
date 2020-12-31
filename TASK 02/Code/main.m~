@@ -177,10 +177,8 @@ mat_beams = [
     result = KG == KG_enric_1;
     id7 = find(result == 0);
     
-    KG = sparse(n_dof,n_dof);
-    
     Tdof_p = n_plates.T2;
-
+    
     % Plates
     for e = plate_el
         i = Tdof_p(:,e);
