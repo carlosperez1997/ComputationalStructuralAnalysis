@@ -100,17 +100,17 @@ n_plates.el = [Tskin' Tfloor'];            % Plate elements
     [Iyc, Izc, Ac, Jc] = Inertia_calculation(y1,z1, y2,z2, y3,z3, a1,b1, a2,b2, a3,b3);
     [beams.m, beams.le, beams.V] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Treinf, Tbeams, xnodes, rho2, Ac);
 
-% Beam properties
-mat_beams = [
-%  Density  Young   Poisson     A     Iy     Iz     J
-      rho1,    E1,      nu1,   Aa,   Iya,   Iza,   Ja; % Frames (1)
-      rho1,    E1,      nu1,   Ab,   Iyb,   Izb,   Jb; % Stringers (2)
-      rho2,    E2,      nu2,   Ac,   Iyc,   Izc,   Jc; % Reinforcements (3)
-];
+    % Beam properties
+    mat_beams = [
+    %  Density  Young   Poisson     A     Iy     Iz     J
+          rho1,    E1,      nu1,   Aa,   Iya,   Iza,   Ja; % Frames (1)
+          rho1,    E1,      nu1,   Ab,   Iyb,   Izb,   Jb; % Stringers (2)
+          rho2,    E2,      nu2,   Ac,   Iyc,   Izc,   Jc; % Reinforcements (3)
+    ];
 
-% Stiffness matrix computation
+    % Stiffness matrix computation
 
-[R_beams, K_beams] = beam_elements(n_beams, beams.le, Tmat_beams, mat_beams, dat_beams);
+    [R_beams, K_beams] = beam_elements(n_beams, beams.le, Tmat_beams, mat_beams, dat_beams);
     
     load('Reb_enric.mat');
     result = R_beams == Reb_enric;
@@ -134,6 +134,8 @@ mat_beams = [
 
     [plates.m, plates.a, plates.b, plates.V] = plates_mass_length_calculus(Tplates, xnodes, mat_plates, Tmat_plates);
     
+    % Stiffness matrix computation
+    
     [R_plates, K_plates] = plate_elements(n_plates, Tmat_plates, mat_plates, dat_plates, plates.a, plates.b);
 
         load('Kep_enric.mat');
@@ -149,7 +151,11 @@ mat_beams = [
     
     n_beams.T2 = calculate_T2 (n_beams, Tbeams, 'beams');
     n_plates.T2 = calculate_T2 (n_plates, Tplates, 'plates');
-   
+
+    bool = true;
+
+if bool == false 
+    
     load('T2_beams_enric.mat');
         result = n_beams.T2 == T2_beams_enric;
         id4 = find(result == 0);
@@ -196,10 +202,6 @@ mat_beams = [
     id7 = find(result == 0);
 %% Prescribed degrees of freedom
 
-
-    bool = true;
-
-if bool == false 
 Tsym;
 
 
@@ -245,19 +247,53 @@ end
 
 %% D) Loads transmitted by the nose and the tail cone
 
-F_nose = zeros( 2 * n_beams.n_nel * n_beams.n_deg, length(Tnose))
-F_tail = zeros( 2 * n_beams.n_nel * n_beams.n_deg, length(Ttail))
+F_nose = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Tnose));
+F_tail = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Ttail));
 
-l_nose = 2 * sum(le(Tnose));
+l_nose = 2 * sum(beams.le(Tnose));
 D_nose = 0.5 * rhoa * V * V * S * CD;
 q_nose = [ D_nose/l_nose ; 0 ; 0 ];
 
+% 1. Drag nose 
 for i = 1:length(Tnose)
     e = Tnose(i);
-    F_nose (:,e) = element_force_beam (e, geo_beam, Reb, q_nose);
+    F_nose (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_nose);
 end
 
+% 2. Drag + Lift tail : Distributed force + Element force vector
+l_tail = 2 * sum(beams.le(Ttail));
+q_tail = [ D_tail/l_tail ; 0 ; L_tail/l_tail ];
+for i = 1:length(Ttail)
+    e = Ttail(i);
+    F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, q_tail);
+end
 
+% 3. Global force vector : Drag + Lift - Nose & Tail
+
+F = zeros(n_beams.n_dof,1);
+for j = 1:length(Tnose)
+    e = Tnose(j);
+    i = n_beams.T2(:,e)';
+    F(i) = F(i) + F_nose(:,e);
+end
+for j = 1:length(Ttail)
+    e = Ttail(j);
+    i = n_beams.T2(:,e)';
+    F(i) = F(i) + F_tail(:,e);
+end
+
+    %case 5
+    %    vr = [(925-1)*6+1 (925-1)*6+3]; % centro en medio
+    %case 6
+    %    vr = [1555 1557 11803 11805]; % abajo delante y detras
+
+    
+[u,R] = solver (vr, vl, KG, f, n_dof);
+
+
+
+
+stop = true;
 %% E) Cabin pressure
 
 % Solve problem for loading case E ...
@@ -671,32 +707,20 @@ function [R_e, K_el] = plate_elements(n, T_mat, mat, dat, as, bs)
 end
 
 
-function [fe] = beam_force (e, le, n_beams, Reb, qe)
+function [fe] = beam_force (e, le, n_beams, R_beams, qe)
 
-global n_nodxel_beam n_dim
+fe = zeros (2 * n_beams.n_deg,1);
 
-nbe
+R = R_beams (1:3,1:3,e);
+       
+qe = R * qe;
+l = le(e);
 
-fe_p = zeros (2 * n_nodxel_beam * n_dim,1);
+fe ([1,7]) = (0.5 * qe (1) * l) * [1 ; 1];
+fe ([2,6,8,12]) = (0.5 * qe (2) * l) * [1 ; l/6 ; 1 ; -l/6];
+fe ([3,5,9,11]) = (0.5 * qe (3) * l) * [1 ; -l/6 ; 1 ; l/6];
 
-% 1. Rotation Matrix
-
-R = Reb (1:3,1:3,e);
-
-% 2. Load - Local coordinates       
-qe_p = R * qe;
-
-
-% 3. Element force vector - Local coordinates
-l = le (e);
-
-fe_p ([1,7]) = (0.5 * qe_p (1) * l) * [1 ; 1];
-fe_p ([2,6,8,12]) = (0.5 * qe_p (2) * l) * [1 ; l/6 ; 1 ; -l/6];
-fe_p ([3,5,9,11]) = (0.5 * qe_p (3) * l) * [1 ; -l/6 ; 1 ; l/6];
-
-
-% 4. Element force vector - Global coordinates
-fe = Reb(:,:,e)' * fe_p;
+fe = R_beams(:,:,e)' * fe;
 
 end
 
@@ -822,6 +846,38 @@ function T2 = calculate_T2 (n, T, x)
             end
         end
     end
-    
-    
+  
+end
+
+
+function [u,R] = solver (vr, vl, KG, f, n_dof)
+
+    ur = zeros (length(vr) , 1);                              % Imposed disp.
+
+    % Partitioned system of equations : Stiffness
+
+    Kll = KG(vl,vl);
+    Klr = KG(vl,vr);
+    Krl = KG(vr,vl);
+    Krr = KG(vr,vr);
+
+    u = zeros (n_dof , 1);
+    R = zeros (n_dof , 1);
+
+    % Partitioned system of equations : Force
+    fl = f(vl,1);
+    fr = f(vr,1);
+
+    % Solve linear system
+    ul = Kll \ (fl - Klr * ur);                            % Free displacements
+    Rr = Krr * ur + Krl * ul - fr;                         % Reactions 
+
+    % Assembly of global displacements
+    u(vl,1) = ul;
+    u(vr,1) = ur;
+
+    % Assembly of global reactions
+    R(vl,1) = 0;
+    R(vr,1) = Rr;
+
 end
