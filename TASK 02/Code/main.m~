@@ -1,49 +1,51 @@
 function main
-clear
-clc
-close all
+    clear
+    clc
+    close all
+    
+    case_load = 4;
+    
+    % Load mesh data
+    input_fuselage_enric
 
-% Load mesh data
-input_fuselage_enric
+    % Material properties
+    rho1 =   2700; % kg/m3
+    E1   = 68.9e9; % Pa
+    nu1  =   0.33; % Poisson's ratio
+    rho2 =   2810; % kg/m3
+    E2   =   72e9; % Pa % Enric te 72e9
+    nu2  =   0.33; % Poisson's ratio
 
-% Material properties
-rho1 =   2700; % kg/m3
-E1   = 68.9e9; % Pa
-nu1  =   0.33; % Poisson's ratio
-rho2 =   2810; % kg/m3
-E2   =   72e9; % Pa % Enric te 72e9
-nu2  =   0.33; % Poisson's ratio
+    % Atmosphere
+    rhoa = 1.225;             % Air Density [kg/m3]
+    g = 9.81;                 % Gravity Acceleration [m/s2]
 
-% Atmosphere
-rhoa = 1.225;             % Air Density [kg/m3]
-g = 9.81;                 % Gravity Acceleration [m/s2]
+    % Section A : Structural Weight
+    Ms = 22900;              % Mass fuselage [kg]
 
-% Section A : Structural Weight
-Ms = 22900;              % Mass fuselage [kg]
+    % Section B : Passenger Weight
+    Mp = 13500;              % Mass passengers [kg]
 
-% Section B : Passenger Weight
-Mp = 13500;              % Mass passengers [kg]
+    % Section C : Wing loads
+    Ff = [78.94e3 ; 72.22e3 ; -71.07e3];
+    Fr = [17.18e3 ; -72.22e3 ; -25.47e3];
+    Mf = [-349.08e3 ; 194.87e3 ; -86.29e3];
+    Mr = [-203.02e3 ; 83.85e3 ; -91.93e3];
 
-% Section C : Wing loads
-Ff = [78.94e3 ; 72.22e3 ; -71.07e3];
-Fr = [17.18e3 ; -72.22e3 ; -25.47e3];
-Mf = [-349.08e3 ; 194.87e3 ; -86.29e3];
-Mr = [-203.02e3 ; 83.85e3 ; -91.93e3];
+    % Section D : Loads nose & tail cone
+    CD = 0.42;               % Drag coefficient
+    V = 230;                 % Velocity [m/s]
+    S = 12.84;               % Cross section area [m2]
+    L_tail = 164.01e3;       % Lift tail [N]
+    D_tail = 17.58e3;        % Drag tail [N]
 
-% Section D : Loads nose & tail cone
-CD = 0.42;               % Drag coefficient
-V = 230;                 % Velocity [m/s]
-S = 12.84;               % Cross section area [m2]
-L_tail = 164.01e3;       % Lift tail [N]
-D_tail = 17.58e3;        % Drag tail [N]
+    % Section E : Cabin pressure
+    pin = 78191.21;          % Cabin pressure [Pa]
+    pout = 22632.06;         % Outside pressure [Pa]
 
-% Section E : Cabin pressure
-pin = 78191.21;          % Cabin pressure [Pa]
-pout = 22632.06;         % Outside pressure [Pa]
-
-[n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes);
-n_beams.el = [Tframe' Tstring' Treinf'];    % Beam elements
-n_plates.el = [Tskin' Tfloor'];            % Plate elements
+    [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes);
+    n_beams.el = [Tframe' Tstring' Treinf'];    % Beam elements
+    n_plates.el = [Tskin' Tfloor'];            % Plate elements
 
 %% SECTION PARAMETERS
     n_elem = size(Tbeams,1);
@@ -111,14 +113,6 @@ n_plates.el = [Tskin' Tfloor'];            % Plate elements
     % Stiffness matrix computation
 
     [R_beams, K_beams] = beam_elements(n_beams, beams.le, Tmat_beams, mat_beams, dat_beams);
-    
-    load('Reb_enric.mat');
-    result = R_beams == Reb_enric;
-    id1 = find(result == 0);
-    
-    load('Keb_enric.mat');
-    result = K_beams == Keb_enric;
-    id2 = find(result == 0);
 
 %% PLATES
 
@@ -138,179 +132,206 @@ n_plates.el = [Tskin' Tfloor'];            % Plate elements
     
     [R_plates, K_plates] = plate_elements(n_plates, Tmat_plates, mat_plates, dat_plates, plates.a, plates.b);
 
-        load('Kep_enric.mat');
-        result = K_plates == Kep_enric;
-        id3 = find(result == 0);
 %% RHO EFFECTIVE AND TOTAL MASS
 
     [beams, plates] = rho_mass_calculus (beams, plates, n_beams, n_plates, Tmat_beams, Tmat_plates, mat_beams, mat_plates, Ms);
-
-%% Join Beams and Plates Matrix:
     
-    %Degrees of freedom connnectivities table
+%% Join Beams and Plates Matrix:
     
     n_beams.T2 = calculate_T2 (n_beams, Tbeams, 'beams');
     n_plates.T2 = calculate_T2 (n_plates, Tplates, 'plates');
 
-    bool = true;
+    KG = sparse(n_beams.n_dof,n_beams.n_dof);
 
-if bool == false 
-    
-    load('T2_beams_enric.mat');
-        result = n_beams.T2 == T2_beams_enric;
-        id4 = find(result == 0);
-        
-    load('T2_plates_enric.mat');
-        result = n_plates.T2 == T2_plates_enric;
-        id5 = find(result == 0);
-    
-    n_dof = n.n_dof;
-    beam_el = n_beams.el;
-    plate_el = n_plates.el;
-    
-    KG = sparse(n_dof,n_dof);
-    
-    Tdof_b = n_beams.T2;
-    
-    for e = beam_el
-        i = Tdof_b(:,e);
-        I = repmat(i,size(Tdof_b,1),1);
-        J = repelem(i,size(Tdof_b,1),1);
-        KG = KG + sparse(I,J,K_beams(:,:,e),n_dof,n_dof);
+    for e = n_beams.el
+        i = n_beams.T2(:,e);
+        I = repmat(i,size(n_beams.T2,1),1);
+        J = repelem(i,size( n_beams.T2,1),1);
+        KG = KG + sparse(I,J,K_beams(:,:,e),n_beams.n_dof,n_beams.n_dof);
     end
-
-    load('KG_enric_1.mat');
-    result = KG == KG_enric_1;
-    id7 = find(result == 0);
-    
-    KG = sparse(n_dof,n_dof);
-    
-    Tdof_p = n_plates.T2;
 
     % Plates
-    for e = plate_el
-        i = Tdof_p(:,e);
-        I = repmat(i,size(Tdof_p,1),1);
-        J = repelem(i,size(Tdof_p,1),1);
-        KG = KG + sparse(I,J,K_plates(:,:,e),n_dof,n_dof);
+    for e = n_plates.el 
+        i = n_plates.T2(:,e);
+        I = repmat(i,size(n_plates.T2,1),1);
+        J = repelem(i,size( n_plates.T2,1),1);
+        KG = KG + sparse(I,J,K_plates(:,:,e),n_plates.n_dof,n_plates.n_dof);
     end
-    
-    
-    
-    load('KG_enric.mat');
-    result = KG == KG_enric;
-    id7 = find(result == 0);
+
 %% Prescribed degrees of freedom
-
-Tsym;
-
-
-%Obtain the prescribed degrees of freedom vector by applying the symmetry condition on all nodes lying on the XZ-plane (list of nodes provided in Tsym). 
-% Hint: To apply symmetry conditions with respect to XZ-plane, one must prescribe the displacement in y-direction and the rotations around x and z-axes. 
-% Additionally, the displacement in x and z-directions of some node will need to be prescribed in order to avoid rigid body modes.
-
-p = 1;
-for i = 1:length(Tsym)
-   % (1) = 1, 2, 3, 4, 5, 6
-   % (2) = 7, 8, 9, 10, 11, 12
-   e = Tsym(i);
-   % displacement blocked in y-direction
-   vr(p) = (e-1)*n.n_deg + 2; p=p+1;
-   % rotation blocked in x-direction
-   vr(p) = (e-1)*n.n_deg + 4; p=p+1;
-   % rotation blocked in z-direction
-   vr(p) = (e-1)*n.n_deg + 6; p=p+1;   
-end
-
-% Add a node with restricted x and z displacements. 
-e = Tsym(1);
-vr(p) = (e-1)*n.n_deg + 1; p=p+1;
-vr(p) = (e-1)*n.n_deg + 3; p=p+1;
-
-vl = setdiff(1:n.n_dof,vr);
-
-end
-
-% Get vr and vl ...
+   [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes);
 
 %% A) Structural weight
-
-% Solve problem for loading case A ...
+    if case_load == 1 | case_load == 6
+        
+    end
 
 %% B) Weight of the cabin passengers
-
-% Solve problem for loading case B ...
+    if case_load == 2 | case_load == 6
+        
+    end
 
 %% C) Loads transmitted by the wing
-
-% Solve problem for loading case C ... 
+    if case_load == 3 | case_load == 6
+        
+    end
 
 %% D) Loads transmitted by the nose and the tail cone
+    if case_load == 4 | case_load == 6
+        [F] = load_D (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
+    end
 
-F_nose = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Tnose));
-F_tail = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Ttail));
-
-l_nose = 2 * sum(beams.le(Tnose));
-D_nose = 0.5 * rhoa * V * V * S * CD;
-q_nose = [ D_nose/l_nose ; 0 ; 0 ];
-
-% 1. Drag nose 
-for i = 1:length(Tnose)
-    e = Tnose(i);
-    F_nose (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_nose);
-end
-
-% 2. Drag + Lift tail : Distributed force + Element force vector
-l_tail = 2 * sum(beams.le(Ttail));
-q_tail = [ D_tail/l_tail ; 0 ; L_tail/l_tail ];
-for i = 1:length(Ttail)
-    e = Ttail(i);
-    F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, q_tail);
-end
-
-% 3. Global force vector : Drag + Lift - Nose & Tail
-
-F = zeros(n_beams.n_dof,1);
-for j = 1:length(Tnose)
-    e = Tnose(j);
-    i = n_beams.T2(:,e)';
-    F(i) = F(i) + F_nose(:,e);
-end
-for j = 1:length(Ttail)
-    e = Ttail(j);
-    i = n_beams.T2(:,e)';
-    F(i) = F(i) + F_tail(:,e);
-end
-
-    %case 5
-    %    vr = [(925-1)*6+1 (925-1)*6+3]; % centro en medio
-    %case 6
-    %    vr = [1555 1557 11803 11805]; % abajo delante y detras
-    
-    min(xnodes(:,1))
-    max(xnodes(:,1))
-    min(xnodes(:,2))
-    max(xnodes(:,2))
-    min(xnodes(:,3))
-    max(xnodes(:,3))
-    
-[u,R] = solver (vr, vl, KG, f, n_dof);
-
-xnodes(924,:)
-
-
-stop = true;
 %% E) Cabin pressure
-
-% Solve problem for loading case E ...
-
+    if case_load == 5 | case_load == 6
+        [F] = load_D (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
+    end
+  
+    [u,R] = solver (vr, vl, KG, F, n.n_dof);
+    [uint_beams,uint_plates] = local_displacements (n_beams, n_plates, R_beams, R_plates, u);
+    [N,Qy,Qz,T,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams);
 %% Postprocess
 
 plotFuselage(xnodes,Tbeams,Tplates,Tmat_beams,Tmat_plates,u,uint_beams,N,Qy,Qz,T,My,Mz,uint_plates,mat_plates)
 end
 
-function load_D (beam)
+
+
+function [F] = load_D ( ...
+    n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail)
+
+    F_nose = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Tnose));
+    F_tail = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Ttail));
+
+    l_nose = 2 * sum(beams.le(Tnose));
+    D_nose = 0.5 * rhoa * V * V * S * CD;
+    q_nose = [ D_nose/l_nose ; 0 ; 0 ];
+
+    % Drag nose 
+    for i = 1:length(Tnose)
+        e = Tnose(i);
+        F_nose (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_nose);
+    end
+
+    % Drag + Lift tail : Distributed force + Element force vector
+    l_tail = 2 * sum(beams.le(Ttail));
+    q_tail = [ D_tail/l_tail ; 0 ; L_tail/l_tail ];
+    for i = 1:length(Ttail)
+        e = Ttail(i);
+        F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, q_tail);
+    end
+
+    % Global force 
+    F = zeros(n_beams.n_dof,1);
+    for j = 1:length(Tnose)
+        e = Tnose(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_nose(:,e);
+    end
+    for j = 1:length(Ttail)
+        e = Ttail(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_tail(:,e);
+    end
     
+end
+
+
+function C = inner_join (A, B) 
+    p = 1;
+    for i = 1:length(A)
+        for j = 1:length(B)
+            if A(i) == B(j)
+                C(p)=A(i);
+                p = p+1;
+            end
+        end
+    end
+end
+
+
+function [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes)
+    %Obtain the prescribed degrees of freedom vector by applying the symmetry condition on all nodes lying on the XZ-plane (list of nodes provided in Tsym). 
+    % Hint: To apply symmetry conditions with respect to XZ-plane, one must prescribe the displacement in y-direction and the rotations around x and z-axes. 
+    % Additionally, the displacement in x and z-directions of some node will need to be prescribed in order to avoid rigid body modes.
+
+    mid_x = (min(xnodes(:,1)) + max(xnodes(:,1))) / 2;
+    mid_x_nodes = find(round(xnodes(:,1)) == round(mid_x));
+    mid_y = (min(xnodes(:,2)) + max(xnodes(:,2))) / 2;
+    mid_y_nodes = find(round(xnodes(:,2)) == round(mid_y));
+    mid_z = (min(xnodes(:,3)) + max(xnodes(:,3))) / 2;
+    mid_z_nodes = find(round(xnodes(:,3)) == round(mid_z));
+    
+    min_x_nodes = find(xnodes(:,1) == min(xnodes(:,1)));
+    max_x_nodes = find(xnodes(:,1) == max(xnodes(:,1)));
+    min_y_nodes = find(xnodes(:,2) == min(xnodes(:,2)));
+    max_y_nodes = find(xnodes(:,2) == max(xnodes(:,2)));
+    min_z_nodes = find(xnodes(:,3) == min(xnodes(:,3)));
+    max_z_nodes = find(xnodes(:,3) == max(xnodes(:,3)));
+    
+    switch case_load
+        case 1  % abajo delante y detras
+            max_x_mid_y_nodes = inner_join (max_x_nodes, min_z_nodes)
+            max_x_mid_yz_nodes = inner_join (max_x_mid_y_nodes, min_z_nodes);
+            vr = [1555 1557 11803 11805];
+            
+        case 2
+            
+            max_x_midy_nodes = inner_join (max_x_nodes, mid_y_nodes);
+            max_x_midyz_nodes = inner_join (max_x_midy_nodes, mid_z_nodes);
+            selected(1) = max_x_midyz_nodes(1);
+            
+            min_x_midy_nodes = inner_join (min_x_nodes, mid_y_nodes);
+            min_x_midyz_nodes = inner_join (min_x_midy_nodes, mid_z_nodes);
+            selected(2) = min_x_midyz_nodes(1);
+            
+            % delante detras en medio
+            vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
+                (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
+            %x = (y-1)*6 + 1
+        case 3
+            
+            
+            vr = [1555 1557 11803 11805]; % abajo delante y detras
+            
+            
+        case 4
+            % x: max/min, y: low and z: middle
+            mid_xy_nodes = inner_join (mid_x_nodes, mid_y_nodes); 
+            mid_xyz_nodes = inner_join (mid_xy_nodes, mid_z_nodes); 
+            
+            % We select the first one
+            selected = mid_xyz_nodes(1);
+            vr = [ (selected-1)*n.n_deg+1 (selected-1)*n.n_deg+3 ];
+            
+            vr = [1555 1557 11803 11805]; % abajo delante y detras
+        case 5
+            % x: middle, y: middle and z: middle
+            mid_xy_nodes = inner_join (mid_x_nodes, mid_y_nodes); 
+            mid_xyz_nodes = inner_join (mid_xy_nodes, mid_z_nodes); 
+            
+            % We select the first one
+            selected = mid_xyz_nodes(1);
+            vr = [ (selected)*n.n_deg+1 (selected)*n.n_deg+1 ];
+
+        case 6
+            vr = [1555 1557 11803 11805]; % abajo delante y detras
+    end
+    
+    for i = 1:length(Tsym)
+        e = Tsym(i);
+        % Displacement y-dir
+        v1 = n.n_deg * (e-1) + 2;
+        % Rotation x-dir
+        v2 = n.n_deg * (e-1) + 4;
+        % Rot y_dir
+        v3 = n.n_deg * (e-1) + 6;             
+    
+        vr = [vr [v1 v2 v3]];
+    
+    end
+
+    vl = setdiff(1:n.n_dof,vr); 
+
 end
 
 
@@ -408,6 +429,41 @@ function [R_e, K_el] = beam_and_plates_elements(n, l_elem, T_mat, mat, dat)
         end
     end
     
+end
+
+
+function [N,Qy,Qz,Tor,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams)
+
+    N = zeros (1,n_beams.n_elem);
+    Qy = zeros (1,n_beams.n_elem);
+    Qz = zeros (1,n_beams.n_elem);
+    Tor = zeros (1,n_beams.n_elem);
+    My = zeros (2,n_beams.n_elem);
+    Mz = zeros (2,n_beams.n_elem);
+
+    for i = 1:length(n_beams.el)
+        e = n_beams.el(i);   
+        for r = 1 : n_beams.n_nel * n_beams.n_deg
+            p = n_beams.T2(r,e);
+            disp(r,1) = u(p,1);
+        end
+        f_int = R_beams (:,:,e) * K_beams (:,:,e) * disp; 
+
+        %Axial force x
+        N(e) = f_int (7);
+        %Shear force y
+        Qy(e) = f_int (8);
+        %Shear force z
+        Qz(e) = f_int (9);
+        %Torsion moment x
+        Tor(e) = f_int (10);
+        %Bending moment y
+        My(1,e) = -f_int (5);
+        My(2,e) = f_int (11);
+        %Bending moment z
+        Mz(1,e) = -f_int (6);
+        Mz(2,e) = f_int (12);
+    end
 end
 
 
@@ -727,6 +783,34 @@ fe ([2,6,8,12]) = (0.5 * qe (2) * l) * [1 ; l/6 ; 1 ; -l/6];
 fe ([3,5,9,11]) = (0.5 * qe (3) * l) * [1 ; -l/6 ; 1 ; l/6];
 
 fe = R_beams(:,:,e)' * fe;
+
+end
+
+
+function [uint_beams,uint_plates] = local_displacements (n_beams, n_plates, R_beams, R_plates, u)
+
+uint_beams = zeros ( n_beams.n_deg * n_beams.n_nel ,  n_beams.n_elem);
+uint_plates = zeros ( n_beams.n_deg * n_plates.n_nel ,  n_plates.n_elem );
+
+%% BEAMS
+for i = 1 : length(n_beams.el)
+    e = n_beams.el(i);
+    for r = 1 : n_beams.n_nel * n_beams.n_deg
+        p = n_beams.T2(r,e);
+        disp(r,1) = u(p,1);
+    end
+    uint_beams (:,e) = R_beams (:,:,e) * disp;  
+end
+
+%% PLATES
+for i = 1 : length(n_plates.el)
+    e = n_plates.el(i);
+    for r = 1 : n_plates.n_nel * n_plates.n_deg
+        p = n_plates.T2(r,e);
+        disp(r,1) = u(p,1);
+    end
+    uint_plates (:,e) = R_plates (:,:,e) * disp;
+end
 
 end
 

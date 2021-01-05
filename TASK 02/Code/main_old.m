@@ -113,6 +113,14 @@ function main
     % Stiffness matrix computation
 
     [R_beams, K_beams] = beam_elements(n_beams, beams.le, Tmat_beams, mat_beams, dat_beams);
+    
+    load('Reb_enric.mat');
+    result = R_beams == Reb_enric;
+    id1 = find(result == 0);
+    
+    load('Keb_enric.mat');
+    result = K_beams == Keb_enric;
+    id2 = find(result == 0);
 
 %% PLATES
 
@@ -132,35 +140,56 @@ function main
     
     [R_plates, K_plates] = plate_elements(n_plates, Tmat_plates, mat_plates, dat_plates, plates.a, plates.b);
 
+        load('Kep_enric.mat');
+        result = K_plates == Kep_enric;
+        id3 = find(result == 0);
 %% RHO EFFECTIVE AND TOTAL MASS
 
     [beams, plates] = rho_mass_calculus (beams, plates, n_beams, n_plates, Tmat_beams, Tmat_plates, mat_beams, mat_plates, Ms);
     
 %% Join Beams and Plates Matrix:
     
+    %Degrees of freedom connnectivities table
+    
     n_beams.T2 = calculate_T2 (n_beams, Tbeams, 'beams');
     n_plates.T2 = calculate_T2 (n_plates, Tplates, 'plates');
-
-    KG = sparse(n_beams.n_dof,n_beams.n_dof);
-
-    for e = n_beams.el
-        i = n_beams.T2(:,e);
+    
+    load('T2_beams_enric.mat');
+        result = n_beams.T2 == T2_beams_enric;
+        id4 = find(result == 0);
+        
+    load('T2_plates_enric.mat');
+        result = n_plates.T2 == T2_plates_enric;
+        id5 = find(result == 0);
+    
+    
+    KG = sparse(n.beams.n_dof,n.beams.n_dof);
+    
+    Tdof_b = n_beams.T2;
+    
+    for e = n_beams.el;
+        i = Tdof_b(:,e);
         I = repmat(i,size(n_beams.T2,1),1);
         J = repelem(i,size( n_beams.T2,1),1);
         KG = KG + sparse(I,J,K_beams(:,:,e),n_beams.n_dof,n_beams.n_dof);
     end
 
+    
+    Tdof_p = n_plates.T2;
+
     % Plates
-    for e = n_plates.el 
-        i = n_plates.T2(:,e);
+    for e = plate_el
+        i = Tdof_p(:,e);
         I = repmat(i,size(n_plates.T2,1),1);
         J = repelem(i,size( n_plates.T2,1),1);
-        KG = KG + sparse(I,J,K_plates(:,:,e),n_plates.n_dof,n_plates.n_dof);
+        KG = KG + sparse(I,J,K_plates(:,:,e),n_dof,n_dof);
     end
 
 %% Prescribed degrees of freedom
    [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes);
 
+
+   
 %% A) Structural weight
     if case_load == 1 | case_load == 6
         
@@ -183,7 +212,7 @@ function main
 
 %% E) Cabin pressure
     if case_load == 5 | case_load == 6
-        [F] = load_E (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
+        [F] = load_D (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
     end
   
     [u,R] = solver (vr, vl, KG, F, n.n_dof);
@@ -193,9 +222,6 @@ function main
 
 plotFuselage(xnodes,Tbeams,Tplates,Tmat_beams,Tmat_plates,u,uint_beams,N,Qy,Qz,T,My,Mz,uint_plates,mat_plates)
 end
-
-
-
 
 function [F] = load_D ( ...
     n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail)
@@ -236,13 +262,6 @@ function [F] = load_D ( ...
     
 end
 
-
-function [F] = load_E ( ...
-    )
-    
-end
-
-
 function C = inner_join (A, B) 
     p = 1;
     for i = 1:length(A)
@@ -276,39 +295,14 @@ function [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes)
     max_z_nodes = find(xnodes(:,3) == max(xnodes(:,3)));
     
     switch case_load
-        case 1  % front and rear (low)
-            max_x_min_z_nodes = inner_join (max_x_nodes, min_z_nodes);
-            selected(1) = max_x_min_z_nodes(1);
+        case 1  % abajo delante y detras
             
-            min_x_min_z_nodes = inner_join (min_x_nodes, min_z_nodes);
-            selected(2) = min_x_min_z_nodes(1);
+            vr = [1555 1557 11803 11805];
             
-            vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
-                (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
-            
-        case 2 
-            max_x_midy_nodes = inner_join (max_x_nodes, mid_y_nodes);
-            max_x_midyz_nodes = inner_join (max_x_midy_nodes, mid_z_nodes);
-            selected(1) = max_x_midyz_nodes(1);
-            
-            min_x_midy_nodes = inner_join (min_x_nodes, mid_y_nodes);
-            min_x_midyz_nodes = inner_join (min_x_midy_nodes, mid_z_nodes);
-            selected(2) = min_x_midyz_nodes(1);
-            
-            vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
-                (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
-            %x = (y-1)*6 + 1
-            
-        case 3 % front and rear (low)
-            max_x_min_z_nodes = inner_join (max_x_nodes, min_z_nodes);
-            selected(1) = max_x_min_z_nodes(1);
-            
-            min_x_min_z_nodes = inner_join (min_x_nodes, min_z_nodes);
-            selected(2) = min_x_min_z_nodes(1);
-            
-            vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
-                (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
-            
+        case 2
+            vr = [(125-1)*6+1 (125-1)*6+3 (1947-1)*6+1 (1947-1)*6+3]; % delante detras en medio
+        case 3
+            vr = [1555 1557 11803 11805]; % abajo delante y detras
         case 4
             % x: max/min, y: low and z: middle
             mid_xy_nodes = inner_join (mid_x_nodes, mid_y_nodes); 
@@ -316,8 +310,9 @@ function [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes)
             
             % We select the first one
             selected = mid_xyz_nodes(1);
-            vr = [ (selected-1)*n.n_deg+1 (selected-1)*n.n_deg+3 ];
+            vr = [ (selected)*n.n_deg+1 (selected)*n.n_deg+1 ];
             
+            vr = [1555 1557 11803 11805]; % abajo delante y detras
         case 5
             % x: middle, y: middle and z: middle
             mid_xy_nodes = inner_join (mid_x_nodes, mid_y_nodes); 
@@ -327,15 +322,8 @@ function [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes)
             selected = mid_xyz_nodes(1);
             vr = [ (selected)*n.n_deg+1 (selected)*n.n_deg+1 ];
 
-        case 6 % front and rear (low)
-            max_x_min_z_nodes = inner_join (max_x_nodes, min_z_nodes);
-            selected(1) = max_x_min_z_nodes(1);
-            
-            min_x_min_z_nodes = inner_join (min_x_nodes, min_z_nodes);
-            selected(2) = min_x_min_z_nodes(1);
-            
-            vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
-                (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
+        case 6
+            vr = [1555 1557 11803 11805]; % abajo delante y detras
     end
     
     for i = 1:length(Tsym)
