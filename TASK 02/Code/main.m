@@ -3,45 +3,52 @@ function main
     clc
     close all
     
-    case_load = 4;
+    % 1 = case A, 2 = case B, 3 = case C, 
+    % 4 = case D, 5 = case E, 6 = all cases
+    case_load = 5;
+    % true: (beams+plate) false: (only beams)
+    bool_k = true; 
     
+%% INPUT DATA
     % Load mesh data
-    input_fuselage_enric
+    input_fuselage
 
     % Material properties
     rho1 =   2700; % kg/m3
     E1   = 68.9e9; % Pa
     nu1  =   0.33; % Poisson's ratio
     rho2 =   2810; % kg/m3
-    E2   =   72e9; % Pa % Enric te 72e9
+    E2   =   70e9; % Pa
     nu2  =   0.33; % Poisson's ratio
 
     % Atmosphere
-    rhoa = 1.225;             % Air Density [kg/m3]
-    g = 9.81;                 % Gravity Acceleration [m/s2]
+    rhoa = 1.225; % Air Density [kg/m3]
+    g =     9.81; % Gravity Acceleration [m/s2]
 
-    % Section A : Structural Weight
-    Ms = 22900;              % Mass fuselage [kg]
+    % Case A : Structural Weight
+    Ms = 22900; % Mass fuselage [kg]
 
-    % Section B : Passenger Weight
-    Mp = 13500;              % Mass passengers [kg]
+    % Case B : Passenger Weight
+    Mp = 13500; % Mass passengers [kg]
 
-    % Section C : Wing loads
+    % Case C : Wing loads
     Ff = [78.94e3 ; 72.22e3 ; -71.07e3];
     Fr = [17.18e3 ; -72.22e3 ; -25.47e3];
     Mf = [-349.08e3 ; 194.87e3 ; -86.29e3];
     Mr = [-203.02e3 ; 83.85e3 ; -91.93e3];
 
-    % Section D : Loads nose & tail cone
-    CD = 0.42;               % Drag coefficient
-    V = 230;                 % Velocity [m/s]
-    S = 12.84;               % Cross section area [m2]
-    L_tail = 164.01e3;       % Lift tail [N]
-    D_tail = 17.58e3;        % Drag tail [N]
+    % Case D : Loads nose and tail cone
+    CD = 0.42;  % Drag coefficient
+    V = 230;    % Velocity [m/s]
+    S = 12.84;  % Cross section area [m2]
+    L_tail = 164.01e3; % Lift tail [N]
+    D_tail = 17.58e3;  % Drag tail [N]
 
-    % Section E : Cabin pressure
-    pin = 78191.21;          % Cabin pressure [Pa]
-    pout = 22632.06;         % Outside pressure [Pa]
+    % Case E : Cabin pressure
+    pin = 78191.21;  % Cabin pressure [Pa]
+    pout = 22632.06; % Outside pressure [Pa]
+    
+%% DIMENSIONS
 
     [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes);
     n_beams.el = [Tframe' Tstring' Treinf'];    % Beam elements
@@ -140,7 +147,7 @@ function main
     
     n_beams.T2 = calculate_T2 (n_beams, Tbeams, 'beams');
     n_plates.T2 = calculate_T2 (n_plates, Tplates, 'plates');
-
+    
     KG = sparse(n_beams.n_dof,n_beams.n_dof);
 
     for e = n_beams.el
@@ -149,49 +156,55 @@ function main
         J = repelem(i,size( n_beams.T2,1),1);
         KG = KG + sparse(I,J,K_beams(:,:,e),n_beams.n_dof,n_beams.n_dof);
     end
-
-    % Plates
-    for e = n_plates.el 
-        i = n_plates.T2(:,e);
-        I = repmat(i,size(n_plates.T2,1),1);
-        J = repelem(i,size( n_plates.T2,1),1);
-        KG = KG + sparse(I,J,K_plates(:,:,e),n_plates.n_dof,n_plates.n_dof);
+    
+    if bool_k == true
+        % Plates
+        for e = n_plates.el 
+            i = n_plates.T2(:,e);
+            I = repmat(i,size(n_plates.T2,1),1);
+            J = repelem(i,size( n_plates.T2,1),1);
+            KG = KG + sparse(I,J,K_plates(:,:,e),n_plates.n_dof,n_plates.n_dof);
+        end
     end
-
+    
 %% Prescribed degrees of freedom
    [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes);
 
+   F = zeros(n.n_dof, 1);
 %% A) Structural weight
-    if case_load == 1 | case_load == 6
+    if case_load == 1 || case_load == 6
         
     end
 
 %% B) Weight of the cabin passengers
-    if case_load == 2 | case_load == 6
+    if case_load == 2 || case_load == 6
         
     end
 
 %% C) Loads transmitted by the wing
-    if case_load == 3 | case_load == 6
+    if case_load == 3 || case_load == 6
         
     end
 
 %% D) Loads transmitted by the nose and the tail cone
-    if case_load == 4 | case_load == 6
-        [F] = load_D (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
+    if case_load == 4 || case_load == 6
+        F4 = load_D (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
+        F = F + F4;
     end
 
 %% E) Cabin pressure
-    if case_load == 5 | case_load == 6
-        [F] = load_E (n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail);
+    if case_load == 5 || case_load == 6
+        F5 = load_E(n_plates, plates, R_plates, n_beams, beams, R_beams, dat_plates, Tskin, Tnose, Ttail, pin, pout, S);
+        F = F + F5;
     end
   
     [u,R] = solver (vr, vl, KG, F, n.n_dof);
     [uint_beams,uint_plates] = local_displacements (n_beams, n_plates, R_beams, R_plates, u);
     [N,Qy,Qz,T,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams);
+    
 %% Postprocess
 
-plotFuselage(xnodes,Tbeams,Tplates,Tmat_beams,Tmat_plates,u,uint_beams,N,Qy,Qz,T,My,Mz,uint_plates,mat_plates)
+    plotFuselage(xnodes,Tbeams,Tplates,Tmat_beams,Tmat_plates,u,uint_beams,N,Qy,Qz,T,My,Mz,uint_plates,mat_plates)
 end
 
 
@@ -200,8 +213,8 @@ end
 function [F] = load_D ( ...
     n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail)
 
-    F_nose = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Tnose));
-    F_tail = zeros( 2 * n_beams.n_nel * n_beams.n_deg/2, length(Ttail));
+    F_nose = zeros( n_beams.n_nel * n_beams.n_deg, length(Tnose));
+    F_tail = zeros( n_beams.n_nel * n_beams.n_deg, length(Ttail));
 
     l_nose = 2 * sum(beams.le(Tnose));
     D_nose = 0.5 * rhoa * V * V * S * CD;
@@ -238,7 +251,63 @@ end
 
 
 function [F] = load_E ( ...
-    )
+    n_plates, plates, R_plates, n_beams, beams, R_beams, dat_plates, Tskin, Tnose, Ttail, pin, pout, S)
+
+    F_pressure = zeros(n_plates.n_nel*n_plates.n_deg, length(Tskin));
+    F_nose = zeros(n_beams.n_nel*n_beams.n_deg, length(Tnose));
+    F_tail = zeros(n_beams.n_nel*n_beams.n_deg, length(Ttail));
+    
+    
+    for i = 1:length(Tskin)
+       e = Tskin(i); 
+       alpha = dat_plates (e,1);
+       beta = dat_plates (e,2);
+       gamma = dat_plates (e,3);
+
+       sa = sin (alpha);   sb = sin (beta);   sg = sin (gamma);
+       ca = cos (alpha);   cb = cos (beta);   cg = cos (gamma);
+
+       n_e = [ -ca*sb*cg+sa*sg ; -ca*sb*sg-sa*cg ; ca*cb ];
+
+       p_skin = (pin-pout) * n_e;
+
+       F_pressure (:,e) = plate_force (e, plates.a, plates.b, n_plates, R_plates, p_skin);
+       
+    end
+    
+    % Nose Pressure nose
+    l_nose = 2 * sum(beams.le(Tnose));
+    for i = 1:length(Tnose) 
+       e = Tnose(i);
+       p_nose = [ -(pin-pout)*(S/l_nose) ; 0 ; 0];
+       F_nose (:,e) = beam_force(e, beams.le, n_beams, R_beams, p_nose);
+    end
+
+    % Tail Pressure 
+    l_tail = 2 * sum(beams.le(Ttail));
+    for i = 1:length(Ttail) 
+       e = Ttail(i);
+       p_tail = [ (pin-pout)*(S/l_tail) ; 0 ; 0];
+       F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, p_tail); 
+    end
+    
+    % Global force 
+    F = zeros(n_beams.n_dof,1);
+    for j = 1:length(Tskin)
+        e = Tskin(j);
+        i = n_plates.T2(:,e)';
+        F(i) = F(i) + F_pressure(:,e);
+    end
+    for j = 1:length(Tnose)
+        e = Tnose(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_nose(:,e);
+    end
+    for j = 1:length(Ttail)
+        e = Ttail(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_tail(:,e);
+    end
     
 end
 
@@ -804,6 +873,28 @@ fe ([2,6,8,12]) = (0.5 * qe (2) * l) * [1 ; l/6 ; 1 ; -l/6];
 fe ([3,5,9,11]) = (0.5 * qe (3) * l) * [1 ; -l/6 ; 1 ; l/6];
 
 fe = R_beams(:,:,e)' * fe;
+
+end
+
+
+function [fe] = plate_force (e, as, bs, n_plates, R_plates, pe)
+
+    fe_p = zeros (n_plates.n_nel * n_plates.n_deg,1);
+    R = R_plates (1:3,1:3,e);     
+    pe_p = R * pe;
+
+    a = as(e);
+    b = bs(e);
+
+    fe_p ([1,2,7,8,13,14,19,20]) = (pe_p (1) * a * b) ...
+                                    * [1; 0; 1; 0; 1; 0; 1; 0] + ...
+                                    (pe_p (2) * a * b) ...
+                                    * [0; 1; 0; 1; 0; 1; 0; 1];
+
+    fe_p ([3,4,5,9,10,11,15,16,17,21,22,23]) = (a * b * pe_p(3)) ...
+         * [1; b/3; a/3; 1; -b/3; a/3; 1; -b/3; -a/3; 1; b/3; -a/3]; 
+
+    fe = R_plates(:,:,e)' * fe_p;
 
 end
 
