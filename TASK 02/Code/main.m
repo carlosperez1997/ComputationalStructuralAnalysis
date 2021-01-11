@@ -5,21 +5,20 @@ function main
     
     % 1 = case A, 2 = case B, 3 = case C, 
     % 4 = case D, 5 = case E, 6 = all cases
-    case_load = 5;
-    % true: (beams+plate) false: (only beams)
+    case_load = 6;
+    % true: (beams+plate) false: (only plates)
     bool_k = true; 
     
-%% INPUT DATA
     % Load mesh data
     input_fuselage
 
     % Material properties
-    rho1 =   2700; % kg/m3
-    E1   = 68.9e9; % Pa
-    nu1  =   0.33; % Poisson's ratio
-    rho2 =   2810; % kg/m3
-    E2   =   70e9; % Pa
-    nu2  =   0.33; % Poisson's ratio
+    rho1 =   2650; % kg/m3
+    E1   = 70.1e9; % Pa
+    nu1  =   0.30; % Poisson's ratio
+    rho2 =   2910; % kg/m3
+    E2   =   76.3e9; % Pa
+    nu2  =   0.35; % Poisson's ratio
 
     % Atmosphere
     rhoa = 1.225; % Air Density [kg/m3]
@@ -38,19 +37,17 @@ function main
     Mr = [-203.02e3 ; 83.85e3 ; -91.93e3];
 
     % Case D : Loads nose and tail cone
-    CD = 0.42;  % Drag coefficient
-    V = 230;    % Velocity [m/s]
+    CD = 0.39;  % Drag coefficient
+    V = 210;    % Velocity [m/s]
     S = 12.84;  % Cross section area [m2]
     L_tail = 164.01e3; % Lift tail [N]
-    D_tail = 17.58e3;  % Drag tail [N]
+    D_tail = 56.98e3;  % Drag tail [N]
 
     % Case E : Cabin pressure
     pin = 78191.21;  % Cabin pressure [Pa]
     pout = 22632.06; % Outside pressure [Pa]
     
-%% DIMENSIONS
-
-    [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes);
+    [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, Tframe, Tstring, Treinf, Tskin, Tfloor, xnodes);
     n_beams.el = [Tframe' Tstring' Treinf'];    % Beam elements
     n_plates.el = [Tskin' Tfloor'];            % Plate elements
 
@@ -60,10 +57,11 @@ function main
     beams.le = zeros(n_elem,1); % Length of the element
     beams.m = zeros(n_elem,1); %mass of the element
     beams.V = zeros(n_elem,1); %volume of the element
+    beams.A = zeros(n_elem,1); %area of the element
     
 %% Section A parameters
 
-    h1 = 75e-3;     t1 = 2.5e-3;    a = 25e-3;
+    h1 = 74e-3;     t1 = 2e-3;    a = 20e-3;
 
     % CG and A
     a1 = 2 * a;     b1 = t1;
@@ -75,10 +73,10 @@ function main
     y3 = 0;                      z3 = 0;
 
     [Iya, Iza, Aa, Ja] = Inertia_calculation(y1,z1, y2,z2, y3,z3, a1,b1, a2,b2, a3,b3);
-    [beams.m, beams.le, beams.V] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Tframe, Tbeams, xnodes, rho1, Aa);
+    [beams.m, beams.le, beams.V, beams.A] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Tframe, Tbeams, xnodes, rho1, Aa, beams.A);
 
 %% Section B parameters
-    h2 = 25e-3;     t2 = 2e-3;      b  = 16e-3;     c  = 21e-3;
+    h2 = 24e-3;     t2 = 2.5e-3;      b  = 18e-3;     c  = 20e-3;
 
     % Beam side lengths
     a1 = c + t2/2;  b1 = t2;
@@ -91,10 +89,10 @@ function main
     y3 = 0;                        z3 = 0;
     
     [Iyb, Izb, Ab, Jb] = Inertia_calculation(y1,z1, y2,z2, y3,z3, a1,b1, a2,b2, a3,b3);
-    [beams.m, beams.le, beams.V] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Tstring, Tbeams, xnodes, rho1, Ab);
+    [beams.m, beams.le, beams.V, beams.A] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Tstring, Tbeams, xnodes, rho1, Ab, beams.A);
 
 %% Section C parameters
-    h3 = 50e-3;     t3 = 3e-3;      d  = 25e-3;
+    h3 = 48e-3;     t3 = 2.2e-3;      d  = 22e-3;
     
     % CG and A
     a1 = 2 * d; b1 = t3;
@@ -107,7 +105,7 @@ function main
     y3 = 0;     z3 = 0;
     
     [Iyc, Izc, Ac, Jc] = Inertia_calculation(y1,z1, y2,z2, y3,z3, a1,b1, a2,b2, a3,b3);
-    [beams.m, beams.le, beams.V] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Treinf, Tbeams, xnodes, rho2, Ac);
+    [beams.m, beams.le, beams.V, beams.A] = beam_mass_length_calculus (beams.m, beams.le, beams.V, Treinf, Tbeams, xnodes, rho2, Ac, beams.A);
 
     % Beam properties
     mat_beams = [
@@ -133,7 +131,7 @@ function main
           rho2,    E2,      nu2,   hf; % Floor (2)
     ];
 
-    [plates.m, plates.a, plates.b, plates.V] = plates_mass_length_calculus(Tplates, xnodes, mat_plates, Tmat_plates);
+    [plates.m, plates.a, plates.b, plates.V, plates.h] = plates_mass_length_calculus(Tplates, xnodes, mat_plates, Tmat_plates);
     
     % Stiffness matrix computation
     
@@ -149,41 +147,44 @@ function main
     n_plates.T2 = calculate_T2 (n_plates, Tplates, 'plates');
     
     KG = sparse(n_beams.n_dof,n_beams.n_dof);
-
-    for e = n_beams.el
-        i = n_beams.T2(:,e);
-        I = repmat(i,size(n_beams.T2,1),1);
-        J = repelem(i,size( n_beams.T2,1),1);
-        KG = KG + sparse(I,J,K_beams(:,:,e),n_beams.n_dof,n_beams.n_dof);
-    end
     
     if bool_k == true
-        % Plates
-        for e = n_plates.el 
-            i = n_plates.T2(:,e);
-            I = repmat(i,size(n_plates.T2,1),1);
-            J = repelem(i,size( n_plates.T2,1),1);
-            KG = KG + sparse(I,J,K_plates(:,:,e),n_plates.n_dof,n_plates.n_dof);
+        for e = n_beams.el
+            i = n_beams.T2(:,e);
+            I = repmat(i,size(n_beams.T2,1),1);
+            J = repelem(i,size( n_beams.T2,1),1);
+            KG = KG + sparse(I,J,K_beams(:,:,e),n_beams.n_dof,n_beams.n_dof);
         end
     end
     
+    % Plates
+    for e = n_plates.el 
+        i = n_plates.T2(:,e);
+        I = repmat(i,size(n_plates.T2,1),1);
+        J = repelem(i,size( n_plates.T2,1),1);
+        KG = KG + sparse(I,J,K_plates(:,:,e),n_plates.n_dof,n_plates.n_dof);
+    end
+
 %% Prescribed degrees of freedom
    [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes);
-
+    
    F = zeros(n.n_dof, 1);
 %% A) Structural weight
     if case_load == 1 || case_load == 6
-        
+        F1 = load_A (beams, n_beams, plates,n_plates, R_beams, R_plates, g);
+        F = F + F1;
     end
 
 %% B) Weight of the cabin passengers
     if case_load == 2 || case_load == 6
-        
+        F2 = load_B (Tfloor, plates, R_plates, g, Mp, n_plates);
+        F = F + F2;
     end
 
 %% C) Loads transmitted by the wing
     if case_load == 3 || case_load == 6
-        
+        F3 = load_C (xnodes, Tfront, Trear, beams, R_beams, n_beams, Fr, Ff, Mr, Mf);
+        F = F + F3;
     end
 
 %% D) Loads transmitted by the nose and the tail cone
@@ -197,119 +198,20 @@ function main
         F5 = load_E(n_plates, plates, R_plates, n_beams, beams, R_beams, dat_plates, Tskin, Tnose, Ttail, pin, pout, S);
         F = F + F5;
     end
-  
-    [u,R] = solver (vr, vl, KG, F, n.n_dof);
-    [uint_beams,uint_plates] = local_displacements (n_beams, n_plates, R_beams, R_plates, u);
-    [N,Qy,Qz,T,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams);
     
+    [u,R] = solver (vr, vl, KG, F, n.n_dof);
+    
+    [uint_beams, uint_plates] = local_displacements (n_beams, n_plates, R_beams, R_plates, u);
+    [N,Qy,Qz,T,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams);
 %% Postprocess
 
-    plotFuselage(xnodes,Tbeams,Tplates,Tmat_beams,Tmat_plates,u,uint_beams,N,Qy,Qz,T,My,Mz,uint_plates,mat_plates)
+plotFuselage(xnodes,Tbeams,Tplates,Tmat_beams,Tmat_plates,u,uint_beams,N,Qy,Qz,T,My,Mz,uint_plates,mat_plates)
+
+finish=true;
+
 end
 
 
-
-
-function [F] = load_D ( ...
-    n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail)
-
-    F_nose = zeros( n_beams.n_nel * n_beams.n_deg, length(Tnose));
-    F_tail = zeros( n_beams.n_nel * n_beams.n_deg, length(Ttail));
-
-    l_nose = 2 * sum(beams.le(Tnose));
-    D_nose = 0.5 * rhoa * V * V * S * CD;
-    q_nose = [ D_nose/l_nose ; 0 ; 0 ];
-
-    % Drag nose 
-    for i = 1:length(Tnose)
-        e = Tnose(i);
-        F_nose (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_nose);
-    end
-
-    % Drag + Lift tail : Distributed force + Element force vector
-    l_tail = 2 * sum(beams.le(Ttail));
-    q_tail = [ D_tail/l_tail ; 0 ; L_tail/l_tail ];
-    for i = 1:length(Ttail)
-        e = Ttail(i);
-        F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, q_tail);
-    end
-
-    % Global force 
-    F = zeros(n_beams.n_dof,1);
-    for j = 1:length(Tnose)
-        e = Tnose(j);
-        i = n_beams.T2(:,e)';
-        F(i) = F(i) + F_nose(:,e);
-    end
-    for j = 1:length(Ttail)
-        e = Ttail(j);
-        i = n_beams.T2(:,e)';
-        F(i) = F(i) + F_tail(:,e);
-    end
-    
-end
-
-
-function [F] = load_E ( ...
-    n_plates, plates, R_plates, n_beams, beams, R_beams, dat_plates, Tskin, Tnose, Ttail, pin, pout, S)
-
-    F_pressure = zeros(n_plates.n_nel*n_plates.n_deg, length(Tskin));
-    F_nose = zeros(n_beams.n_nel*n_beams.n_deg, length(Tnose));
-    F_tail = zeros(n_beams.n_nel*n_beams.n_deg, length(Ttail));
-    
-    
-    for i = 1:length(Tskin)
-       e = Tskin(i); 
-       alpha = dat_plates (e,1);
-       beta = dat_plates (e,2);
-       gamma = dat_plates (e,3);
-
-       sa = sin (alpha);   sb = sin (beta);   sg = sin (gamma);
-       ca = cos (alpha);   cb = cos (beta);   cg = cos (gamma);
-
-       n_e = [ -ca*sb*cg+sa*sg ; -ca*sb*sg-sa*cg ; ca*cb ];
-
-       p_skin = (pin-pout) * n_e;
-
-       F_pressure (:,e) = plate_force (e, plates.a, plates.b, n_plates, R_plates, p_skin);
-       
-    end
-    
-    % Nose Pressure nose
-    l_nose = 2 * sum(beams.le(Tnose));
-    for i = 1:length(Tnose) 
-       e = Tnose(i);
-       p_nose = [ -(pin-pout)*(S/l_nose) ; 0 ; 0];
-       F_nose (:,e) = beam_force(e, beams.le, n_beams, R_beams, p_nose);
-    end
-
-    % Tail Pressure 
-    l_tail = 2 * sum(beams.le(Ttail));
-    for i = 1:length(Ttail) 
-       e = Ttail(i);
-       p_tail = [ (pin-pout)*(S/l_tail) ; 0 ; 0];
-       F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, p_tail); 
-    end
-    
-    % Global force 
-    F = zeros(n_beams.n_dof,1);
-    for j = 1:length(Tskin)
-        e = Tskin(j);
-        i = n_plates.T2(:,e)';
-        F(i) = F(i) + F_pressure(:,e);
-    end
-    for j = 1:length(Tnose)
-        e = Tnose(j);
-        i = n_beams.T2(:,e)';
-        F(i) = F(i) + F_nose(:,e);
-    end
-    for j = 1:length(Ttail)
-        e = Ttail(j);
-        i = n_beams.T2(:,e)';
-        F(i) = F(i) + F_tail(:,e);
-    end
-    
-end
 
 
 function C = inner_join (A, B) 
@@ -356,13 +258,11 @@ function [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes)
                 (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
             
         case 2 
-            max_x_midy_nodes = inner_join (max_x_nodes, mid_y_nodes);
-            max_x_midyz_nodes = inner_join (max_x_midy_nodes, mid_z_nodes);
-            selected(1) = max_x_midyz_nodes(1);
+            max_x_midz_nodes = inner_join (max_x_nodes, mid_z_nodes);
+            selected(1) = max_x_midz_nodes(length(max_x_midz_nodes));
             
-            min_x_midy_nodes = inner_join (min_x_nodes, mid_y_nodes);
-            min_x_midyz_nodes = inner_join (min_x_midy_nodes, mid_z_nodes);
-            selected(2) = min_x_midyz_nodes(1);
+            min_x_midz_nodes = inner_join (min_x_nodes, mid_z_nodes);
+            selected(2) = min_x_midz_nodes(length(min_x_midz_nodes));
             
             vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
                 (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
@@ -379,22 +279,22 @@ function [vr, vl] = fixed_dof (case_load, n, Tsym, xnodes)
                 (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
             
         case 4
-            % x: max/min, y: low and z: middle
-            mid_xy_nodes = inner_join (mid_x_nodes, mid_y_nodes); 
-            mid_xyz_nodes = inner_join (mid_xy_nodes, mid_z_nodes); 
+            max_x_min_z_nodes = inner_join (max_x_nodes, min_z_nodes);
+            selected(1) = max_x_min_z_nodes(1);
             
-            % We select the first one
-            selected = mid_xyz_nodes(1);
-            vr = [ (selected-1)*n.n_deg+1 (selected-1)*n.n_deg+3 ];
+            min_x_min_z_nodes = inner_join (min_x_nodes, min_z_nodes);
+            selected(2) = min_x_min_z_nodes(1);
+            
+            vr = [(selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ...
+                (selected(2)-1)*n.n_deg+1 (selected(2)-1)*n.n_deg+3]; 
             
         case 5
             % x: middle, y: middle and z: middle
-            mid_xy_nodes = inner_join (mid_x_nodes, mid_y_nodes); 
-            mid_xyz_nodes = inner_join (mid_xy_nodes, mid_z_nodes); 
+            mid_xz_nodes = inner_join (mid_x_nodes, mid_z_nodes); 
             
             % We select the first one
-            selected = mid_xyz_nodes(1);
-            vr = [ (selected)*n.n_deg+1 (selected)*n.n_deg+1 ];
+            selected(1) = mid_xz_nodes(1);
+            vr = [ (selected(1)-1)*n.n_deg+1 (selected(1)-1)*n.n_deg+3 ];
 
         case 6 % front and rear (low)
             max_x_min_z_nodes = inner_join (max_x_nodes, min_z_nodes);
@@ -445,83 +345,6 @@ function [Iy, Iz, A, J] = Inertia_calculation(y1,z1, y2,z2, y3,z3, a1,b1, a2,b2,
 end
 
 
-function [R_e, K_el] = beam_and_plates_elements(n, l_elem, T_mat, mat, dat)
-   
-    Kel = zeros(n.n_nel*n.n_deg,n.n_nel*n.n_deg,n.n_elem);
-    Fel = zeros(n.n_nel*n.n_deg, n.n_elem);
-    
-    for e=1:n.n_elem
-        
-        %ROTATION MATRIX
-        alpha=dat(e,1);
-        beta=dat(e,2);
-        gamma=dat(e,3);
-   
-        R = [ cos(beta)*cos(gamma), cos(beta)*sin(gamma), sin(beta);
-            -(sin(alpha)*sin(beta)*cos(gamma))-(cos(alpha)*sin(gamma)), -(sin(alpha)*sin(beta)*sin(gamma))+(cos(alpha)*cos(gamma)), sin(alpha)*cos(beta);
-            -(cos(alpha)*sin(beta)*cos(gamma))+(sin(alpha)*sin(gamma)), -(cos(alpha)*sin(beta)*sin(gamma))-(sin(alpha)*cos(gamma)), cos(alpha)*cos(beta)];
-        
-        Re = zeros(12);
-        
-        Re(1:3,1:3) = R; Re(4:6,4:6) = R;
-        Re(7:9,7:9) = R; Re(10:12,10:12) = R;
-        
-        R_e(:,:,e) = Re;
-        
-        % MATRIX Ke
-        K_e_local = zeros(12);
-        
-        L = l_elem(e);
-        A = mat(T_mat(e),4);
-        E = mat(T_mat(e),2);
-        Iy = mat(T_mat(e),5);
-        Iz = mat(T_mat(e),6);
-        J = mat(T_mat(e),7);
-        nu = mat(T_mat(e),3);
-    
-        % Axial stress in x-direction (bars)
-        K_axial = E*A/L*[
-            1,    -1;
-           -1,     1;
-        ];
-        % Shear stress in y-direction and bending moment in z-direction (beam)
-        K_sheary_bendz = 2*E*Iz/L^3*[
-            6,   3*L,    -6,   3*L;
-          3*L, 2*L^2,  -3*L,   L^2;
-           -6,  -3*L,     6,  -3*L; 
-          3*L,   L^2,  -3*L, 2*L^2;
-        ];
-        % Shear stress in z-direction and bending moment in y-direction (beam)
-        K_shearz_bendy  = 2*E*Iy/L^3*[
-            6,  -3*L,    -6,  -3*L;
-         -3*L, 2*L^2,   3*L,   L^2;
-           -6,   3*L,     6,   3*L; 
-         -3*L,   L^2,   3*L, 2*L^2;
-        ];
-        % Torsion moment in x-direction
-        K_torsion = E*J/(2*(1+nu)*L)*[
-            1,    -1;
-           -1,     1;
-        ];
-
-        K_e_local([1,7],[1,7]) = K_axial;
-        K_e_local([2,6,8,12],[2,6,8,12]) = K_sheary_bendz;
-        K_e_local([3,5,9,11],[3,5,9,11]) = K_shearz_bendy;
-        K_e_local([4,10],[4,10]) = K_torsion;
-    
-        K_e = R_e(:,:,e).'*K_e_local*R_e(:,:,e);
-        
-    end
-    
-    for r=1:n.n_nel*n.n_deg
-        for s=1:n.n_nel*n.n_deg
-            K_el(r,s,e) = K_e(r,s);
-        end
-    end
-    
-end
-
-
 function [N,Qy,Qz,Tor,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams)
 
     N = zeros (1,n_beams.n_elem);
@@ -554,82 +377,6 @@ function [N,Qy,Qz,Tor,My,Mz] = beam_forces (n_beams, u, R_beams, K_beams)
         Mz(1,e) = -f_int (6);
         Mz(2,e) = f_int (12);
     end
-end
-
-
-function [R_e, K_el] = beam_elements2(n, l_elem, T_mat, mat, dat)
-   
-    Kel = zeros(n.n_nel*n.n_deg,n.n_nel*n.n_deg,n.n_elem);
-    Fel = zeros(n.n_nel*n.n_deg, n.n_elem);
-    
-    for e=1:n.n_elem
-        
-        %ROTATION MATRIX
-        alpha=dat(e,1);
-        beta=dat(e,2);
-        gamma=dat(e,3);
-   
-        R = [ cos(beta)*cos(gamma), cos(beta)*sin(gamma), sin(beta);
-            -(sin(alpha)*sin(beta)*cos(gamma))-(cos(alpha)*sin(gamma)), -(sin(alpha)*sin(beta)*sin(gamma))+(cos(alpha)*cos(gamma)), sin(alpha)*cos(beta);
-            -(cos(alpha)*sin(beta)*cos(gamma))+(sin(alpha)*sin(gamma)), -(cos(alpha)*sin(beta)*sin(gamma))-(sin(alpha)*cos(gamma)), cos(alpha)*cos(beta)];
-        
-        Re = zeros(12);
-        
-        Re(1:3,1:3) = R; Re(4:6,4:6) = R;
-        Re(7:9,7:9) = R; Re(10:12,10:12) = R;
-        
-        R_e(:,:,e) = Re;
-        
-        % MATRIX Ke
-        K_e_local = zeros(12);
-        
-        L = l_elem(e);
-        A = mat(T_mat(e),4);
-        E = mat(T_mat(e),2);
-        Iy = mat(T_mat(e),5);
-        Iz = mat(T_mat(e),6);
-        J = mat(T_mat(e),7);
-        nu = mat(T_mat(e),3);
-    
-        % Axial stress in x-direction (bars)
-        K_axial = E*A/L*[
-            1,    -1;
-           -1,     1;
-        ];
-        % Shear stress in y-direction and bending moment in z-direction (beam)
-        K_sheary_bendz = 2*E*Iz/L^3*[
-            6,   3*L,    -6,   3*L;
-          3*L, 2*L^2,  -3*L,   L^2;
-           -6,  -3*L,     6,  -3*L; 
-          3*L,   L^2,  -3*L, 2*L^2;
-        ];
-        % Shear stress in z-direction and bending moment in y-direction (beam)
-        K_shearz_bendy  = 2*E*Iy/L^3*[
-            6,  -3*L,    -6,  -3*L;
-         -3*L, 2*L^2,   3*L,   L^2;
-           -6,   3*L,     6,   3*L; 
-         -3*L,   L^2,   3*L, 2*L^2;
-        ];
-        % Torsion moment in x-direction
-        K_torsion = E*J/(2*(1+nu)*L)*[
-            1,    -1;
-           -1,     1;
-        ];
-
-        K_e_local([1,7],[1,7]) = K_axial;
-        K_e_local([2,6,8,12],[2,6,8,12]) = K_sheary_bendz;
-        K_e_local([3,5,9,11],[3,5,9,11]) = K_shearz_bendy;
-        K_e_local([4,10],[4,10]) = K_torsion;
-    
-        K_e = R_e(:,:,e).'*K_e_local*R_e(:,:,e);
-        
-        for r=1:n.n_nel*n.n_deg
-            for s=1:n.n_nel*n.n_deg
-                K_el(r,s,e) = K_e(r,s);
-            end
-        end
-    end
-
 end
 
 
@@ -699,14 +446,7 @@ function [R_e, K_el] = beam_elements(n, l_elem, Tmat, mat, dat)
         K_e_local(dof_torsion,dof_torsion) = K_torsion;
                                                   
         K_el(:,:,e) = R_e(:,:,e).'*K_e_local*R_e(:,:,e);
-    %}
-        
-        
-        %for r=1:n.n_nel*n.n_deg
-        %    for s=1:n.n_nel*n.n_deg
-        %        K_el(r,s,e) = K_e(r,s);
-        %    end
-        %end
+  
     end
 
 end
@@ -877,24 +617,26 @@ fe = R_beams(:,:,e)' * fe;
 end
 
 
-function [fe] = plate_force (e, as, bs, n_plates, R_plates, pe)
+function [fe] = plate_force (e, plates, R_plates, pe, n_plates)
 
-    fe_p = zeros (n_plates.n_nel * n_plates.n_deg,1);
-    R = R_plates (1:3,1:3,e);     
-    pe_p = R * pe;
+fe_p = zeros(2* n_plates.n_nel * n_plates.dim, 1);
 
-    a = as(e);
-    b = bs(e);
+R = R_plates (1:3,1:3,e);
+       
+pe_p = R * pe;
 
-    fe_p ([1,2,7,8,13,14,19,20]) = (pe_p (1) * a * b) ...
-                                    * [1; 0; 1; 0; 1; 0; 1; 0] + ...
-                                    (pe_p (2) * a * b) ...
-                                    * [0; 1; 0; 1; 0; 1; 0; 1];
+a = plates.a(e);
+b = plates.b(e);
 
-    fe_p ([3,4,5,9,10,11,15,16,17,21,22,23]) = (a * b * pe_p(3)) ...
-         * [1; b/3; a/3; 1; -b/3; a/3; 1; -b/3; -a/3; 1; b/3; -a/3]; 
+fe_p ([1,2,7,8,13,14,19,20]) = (pe_p (1) * a * b) ...
+                                * [1 ; 0 ; 1 ; 0 ; 1 ; 0 ; 1 ; 0] + ...
+                                (pe_p (2) * a * b) ...
+                                * [ 0 ; 1 ; 0 ; 1 ; 0 ; 1 ; 0 ; 1];
 
-    fe = R_plates(:,:,e)' * fe_p;
+fe_p ([3,4,5,9,10,11,15,16,17,21,22,23]) = (a * b * pe_p(3)) ...
+     * [1 ; b/3 ; a/3 ; 1 ; -b/3 ; a/3 ; 1 ; -b/3 ; -a/3 ; 1 ; b/3 ; -a/3]; 
+
+fe = R_plates(:,:,e)' * fe_p;
 
 end
 
@@ -909,9 +651,9 @@ for i = 1 : length(n_beams.el)
     e = n_beams.el(i);
     for r = 1 : n_beams.n_nel * n_beams.n_deg
         p = n_beams.T2(r,e);
-        disp(r,1) = u(p,1);
+        d(r,1) = u(p,1);
     end
-    uint_beams (:,e) = R_beams (:,:,e) * disp;  
+    uint_beams (:,e) = R_beams (:,:,e) * d;  
 end
 
 %% PLATES
@@ -919,15 +661,15 @@ for i = 1 : length(n_plates.el)
     e = n_plates.el(i);
     for r = 1 : n_plates.n_nel * n_plates.n_deg
         p = n_plates.T2(r,e);
-        disp(r,1) = u(p,1);
+        d(r,1) = u(p,1);
     end
-    uint_plates (:,e) = R_plates (:,:,e) * disp;
+    uint_plates (:,e) = R_plates (:,:,e) * d;
 end
 
 end
 
 
-function [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes)
+function [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, Tframe, Tstring, Treinf, Tskin, Tfloor, xnodes)
 
 %% PREPROCESS
     n_beams.n_deg = 6; % Degrees of freedom per node
@@ -935,12 +677,16 @@ function [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes)
     n_beams.n_nel = size(Tbeams,2); % Number of nodes in a beam
     n_beams.n_nod = size(xnodes,1); %Total number of nodes
     n_beams.n_dof = n_beams.n_nod*n_beams.n_deg; %Total number of degrees of freedom
+    n_beams.elements = [Tframe' Tstring' Treinf'];
+    n_beams.dim = size(xnodes,2);
     
     n_plates.n_deg = 6; % Degrees of freedom per node
     n_plates.n_elem = size(Tplates,1); % Number of elements
     n_plates.n_nel = size(Tplates,2); % Number of nodes in a plate
     n_plates.n_nod = size(xnodes,1); %Total number of nodes
     n_plates.n_dof = n_beams.n_nod*n_beams.n_deg; %Total number of degrees of freedom
+    n_plates.elements = [Tskin' Tfloor'];
+    n_plates.dim = size(xnodes,2);
     
     n.n_deg = 6; % Degrees of freedom per node
     n.n_elem = size(Tbeams,1) + size(Tplates,1); % Number of elements
@@ -949,7 +695,7 @@ function [n_beams, n_plates, n] = dimensions (Tbeams, Tplates, xnodes)
 end
 
 
-function [m, le, V] = beam_mass_length_calculus (m, le, V, T, Tbeams, xnodes, rho, A)
+function [m, le, V, A2] = beam_mass_length_calculus (m, le, V, T, Tbeams, xnodes, rho, A, A2)
     for i = 1:length(T)
         e = T(i);
         % Coordinates 
@@ -962,15 +708,18 @@ function [m, le, V] = beam_mass_length_calculus (m, le, V, T, Tbeams, xnodes, rh
 
         % Volume 
         V(e) = A * le(e);
+        A2(e) = A;
 
         % Mass beam
         m(e) = V(e) .* rho;
+        
+        
 
     end
 end
 
 
-function [m, a, b, V] = plates_mass_length_calculus(Tplates, xnodes, mat_plates, Tmat_plates)
+function [m, a, b, V, h] = plates_mass_length_calculus(Tplates, xnodes, mat_plates, Tmat_plates)
     
     for e = 1:size(Tplates,1)
 
@@ -985,10 +734,10 @@ function [m, a, b, V] = plates_mass_length_calculus(Tplates, xnodes, mat_plates,
         % a
         a(e) = sqrt ( (x2-x1).^2 + (y2-y1).^2 + (z2-z1).^2 ) / 2;
         b(e) = sqrt ( (x4-x1).^2 + (y4-y1).^2 + (z4-z1).^2 ) / 2;
-        h = mat_plates(Tmat_plates(e),4);
+        h(e) = mat_plates(Tmat_plates(e),4);
         rho = mat_plates(Tmat_plates(e),1);
 
-        V(e) = 4 * a(e) * b(e) * h;
+        V(e) = 4 * a(e) * b(e) * h(e);
 
         m(e) = rho * V(e);
     end
@@ -1082,4 +831,240 @@ function [u,R] = solver (vr, vl, KG, f, n_dof)
     R(vl,1) = 0;
     R(vr,1) = Rr;
 
+end
+
+
+function f = load_A (beams, n_beams,plates, n_plates, R_beams, R_plates, g)
+
+fwb = zeros (n_beams.n_nel*n_beams.n_deg, length(n_beams.elements));
+fwp = zeros (n_plates.n_nel*n_plates.n_deg, length(n_plates.elements));
+
+% 1. Element force vector : Weight beams
+for e = n_beams.elements
+    wb = g * beams.rho_eff(e) * beams.A(e);
+    wbeam = [0 ; 0 ; -wb];
+    fwb (:,e) = beam_force (e, beams.le, n_beams, R_beams, wbeam);
+end
+
+
+% 2. Element force vector : Weight plates
+for e = n_plates.elements
+    wp = g * plates.h(e) * plates.rho_eff(e);
+    wplate = [0 ; 0 ; -wp];
+    fwp (:,e) = plate_force(e, plates, R_plates, wplate, n_plates);
+end
+
+
+% 3. Global force vector : Structural weight
+
+f = zeros(n_beams.n_dof,1);
+for e = n_beams.elements
+    i = n_beams.T2(:,e);
+    f(i) = f(i) + fwb(:,e);
+end
+
+for e = n_plates.elements
+    i = n_plates.T2(:,e);
+    f(i) = f(i) + fwp(:,e);
+end
+
+
+end
+
+
+function f = load_B (Tfloor, plates, R_plates, g, Mp, n_plates)
+
+    fw_pass = zeros (n_plates.n_nel * n_plates.n_deg, length(Tfloor));
+
+    % 1. Floor surface
+    S_f = 0;
+    for e = Tfloor'
+        S_f = S_f + 4 * plates.a(e) * plates.b(e) ;
+    end
+    S_f = 2 * S_f;
+
+
+    % 2. Weight passengers
+    w_pass_e = ( Mp / S_f ) * g;
+
+
+    % 3. Element force vector : Weight passengers
+    for e = Tfloor'
+        w_pass = [0 ; 0 ; -w_pass_e];
+        fw_pass (:,e) = plate_force (e, plates, R_plates, w_pass, n_plates);
+    end
+
+
+    % 3. Global force vector : Structural weight
+
+    f = zeros(n_plates.n_dof,1);
+    for e = Tfloor'
+        i = n_plates.T2(:,e);
+        f(i) = f(i) + fw_pass(:,e);
+    end
+
+end
+
+
+function f = load_C (xnodes, Tfront, Trear, beams, R_beams, n_beams, Fr, Ff, Mr, Mf)
+
+
+f_front = zeros (2 * n_beams.n_nel * n_beams.dim,length(Tfront));
+f_rear = zeros (2 * n_beams.n_nel * n_beams.dim,length(Trear));
+
+l_front = sum(beams.le(Tfront));
+l_rear = sum(beams.le(Trear));
+
+q_front = - Ff / l_front;
+q_rear = - Fr / l_rear;
+
+
+% Element force vector : Distributed Load Wing
+for e = Tfront'
+    f_front (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_front);
+end
+for e = Trear'
+    f_rear (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_rear);
+end
+
+
+% Global force vector : Distributed Load Wing
+
+f = zeros(n_beams.n_dof,1);
+for e = Tfront'
+    i = n_beams.T2(:,e);
+    f(i) = f(i) + f_front(:,e);
+end
+for e = Trear'
+    i = n_beams.T2(:,e);
+    f(i) = f(i) + f_rear(:,e);
+end
+
+
+% Point wing loads: moments
+H = xnodes(1323,3) - xnodes(1340,3);
+L = xnodes(1043,1) - xnodes(1328,1);
+W = xnodes(1323,2) - xnodes(1340,2);
+
+Meqz = - ( Mf(3) + Mr(3) ) - ( Mf(2) + Mr(2) ) * (W/H);
+Fr1 = - Mr(1) / H;        Ff1 = - Mf(1) / H;
+Fr2 = - Mr(2) / H;        Ff2 = - Mf(2) / H; 
+Fr3 = Meqz / L;           Ff3 = Fr3;
+
+% Node 1035
+f (6205) = Fr2;   f (6206) = - Fr1;
+% Node 1058
+f (6343) = - Fr2;   f (6344) = Fr1;
+% Node 1043
+f (6254) = Fr3;
+% Node 1323
+f (7933) = Ff2;   f (7934) = - Ff1;
+% Node 1340
+f (8035) = - Ff2;   f (8036) = Ff1;
+% Node 1328
+f (7964) = - Ff3;
+
+
+end
+
+
+function F = load_D ( ...
+    n_beams, beams, Tnose, Ttail, R_beams, rhoa, V, S, CD, n, Tsym, xnodes, D_tail, L_tail)
+
+    F_nose = zeros( n_beams.n_nel * n_beams.n_deg, length(Tnose));
+    F_tail = zeros( n_beams.n_nel * n_beams.n_deg, length(Ttail));
+
+    l_nose = 2 * sum(beams.le(Tnose));
+    D_nose = 0.5 * rhoa * V * V * S * CD;
+    q_nose = [ D_nose/l_nose ; 0 ; 0 ];
+
+    % Drag nose 
+    for i = 1:length(Tnose)
+        e = Tnose(i);
+        F_nose (:,e) = beam_force (e, beams.le, n_beams, R_beams, q_nose);
+    end
+
+    % Drag + Lift tail : Distributed force + Element force vector
+    l_tail = 2 * sum(beams.le(Ttail));
+    q_tail = [ D_tail/l_tail ; 0 ; L_tail/l_tail ];
+    for i = 1:length(Ttail)
+        e = Ttail(i);
+        F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, q_tail);
+    end
+
+    % Global force 
+    F = zeros(n_beams.n_dof,1);
+    for j = 1:length(Tnose)
+        e = Tnose(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_nose(:,e);
+    end
+    for j = 1:length(Ttail)
+        e = Ttail(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_tail(:,e);
+    end
+    
+end
+
+
+function F = load_E ( ...
+    n_plates, plates, R_plates, n_beams, beams, R_beams, dat_plates, Tskin, Tnose, Ttail, pin, pout, S)
+
+    F_pressure = zeros(n_plates.n_nel*n_plates.n_deg, length(Tskin));
+    F_nose = zeros(n_beams.n_nel*n_beams.n_deg, length(Tnose));
+    F_tail = zeros(n_beams.n_nel*n_beams.n_deg, length(Ttail));
+    
+    
+    for i = 1:length(Tskin)
+       e = Tskin(i); 
+       alpha = dat_plates (e,1);
+       beta = dat_plates (e,2);
+       gamma = dat_plates (e,3);
+
+       sa = sin(alpha);   sb = sin(beta);   sg = sin(gamma);
+       ca = cos(alpha);   cb = cos(beta);   cg = cos(gamma);
+
+       n_e = [ -ca*sb*cg+sa*sg ; -ca*sb*sg-sa*cg ; ca*cb ];
+
+       p_skin = (pin-pout) * n_e;
+        
+       F_pressure (:,e) = plate_force(e, plates, R_plates, p_skin, n_plates);
+       
+    end
+    
+    % Nose Pressure nose
+    l_nose = 2 * sum(beams.le(Tnose));
+    for i = 1:length(Tnose) 
+       e = Tnose(i);
+       p_nose = [ -(pin-pout)*(S/l_nose); 0; 0];
+       F_nose (:,e) = beam_force(e, beams.le, n_beams, R_beams, p_nose);
+    end
+
+    % Tail Pressure 
+    l_tail = 2 * sum(beams.le(Ttail));
+    for i = 1:length(Ttail) 
+       e = Ttail(i);
+       p_tail = [ (pin-pout)*(S/l_tail); 0; 0];
+       F_tail (:,e) = beam_force(e, beams.le, n_beams, R_beams, p_tail); 
+    end
+    
+    % Global force 
+    F = zeros(n_beams.n_dof,1);
+    for j = 1:length(Tskin)
+        e = Tskin(j);
+        i = n_plates.T2(:,e)';
+        F(i) = F(i) + F_pressure(:,e);
+    end
+    for j = 1:length(Tnose)
+        e = Tnose(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_nose(:,e);
+    end
+    for j = 1:length(Ttail)
+        e = Ttail(j);
+        i = n_beams.T2(:,e)';
+        F(i) = F(i) + F_tail(:,e);
+    end
+    
 end
